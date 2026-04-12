@@ -450,7 +450,7 @@ function renderSurplus() {
 function renderCSV() {
   const date = new Date().toLocaleDateString('fr-FR');
   const lines = [`FMC BETTER Liste de production Atelier Paris ${date}`, '', 'Produit;Quantite a imprimer'];
-  prodList.filter(p => p.toPrint > 0).forEach(p => {
+  prodList.filter(p => p.toPrint > 0).sort((a, b) => a.name.localeCompare(b.name, 'fr')).forEach(p => {
     const label = `${p.name} / ${p.variant ? p.variant + ' / ' : ''}${p.size}`;
     lines.push(`"${label}";${p.toPrint}`);
   });

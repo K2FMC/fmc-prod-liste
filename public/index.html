@@ -449,7 +449,7 @@ function renderSurplus() {
 // ── CSV ────────────────────────────────────────────────────────────────────
 function renderCSV() {
   const date = new Date().toLocaleDateString('fr-FR');
-  const lines = [`FMC BETTER — Liste de production Printtex — ${date}`, '', 'Produit,Quantité à imprimer'];
+  const lines = [`FMC BETTER Liste de production Atelier Paris ${date}`, '', 'Produit;Quantite a imprimer'];
   prodList.filter(p => p.toPrint > 0).forEach(p => {
     const label = `${p.name} / ${p.variant ? p.variant + ' / ' : ''}${p.size}`;
     lines.push(`"${label}";${p.toPrint}`);

@@ -449,8 +449,11 @@ function renderSurplus() {
 // ── CSV ────────────────────────────────────────────────────────────────────
 function renderCSV() {
   const date = new Date().toLocaleDateString('fr-FR');
-  const lines = [`FMC BETTER — Liste de production Atelier Paris — ${date}`, '', 'Produit,Variante,Taille,Commandé,Déduit surplus,À imprimer'];
-  prodList.filter(p => p.toPrint > 0).forEach(p => lines.push(`"${p.name}","${p.variant}","${p.size}",${p.qty},${p.deducted},${p.toPrint}`));
+  const lines = [`FMC BETTER — Liste de production Printtex — ${date}`, '', 'Produit,Quantité à imprimer'];
+  prodList.filter(p => p.toPrint > 0).forEach(p => {
+    const label = `${p.name} / ${p.variant ? p.variant + ' / ' : ''}${p.size}`;
+    lines.push(`"${label}";${p.toPrint}`);
+  });
   document.getElementById('csv-preview').textContent = lines.join('\n');
 }
 

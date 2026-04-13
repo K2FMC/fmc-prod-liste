@@ -399,10 +399,10 @@ function renderProdList(orderCount) {
   document.getElementById('prod-count').textContent = prodList.filter(p => p.toPrint > 0).length + ' articles';
   if (!prodList.length) { document.getElementById('prod-content').innerHTML = '<div class="empty">Aucune commande en attente de production Paris.</div>'; return; }
   document.getElementById('prod-content').innerHTML = `
-    <table><thead><tr><th>Produit</th><th>Variante</th><th>Taille</th><th>Commandé</th><th>À imprimer</th><th>Statut</th></tr></thead><tbody>
+    <table><thead><tr><th>Produit</th><th>Variante</th><th>Commandé</th><th>À imprimer</th><th>Statut</th></tr></thead><tbody>
       ${prodList.map(p => `<tr>
         <td><div class="prod-name">${p.name}</div><div class="prod-ref">${[...new Set(p.refs)].join(', ')}</div></td>
-        <td>${p.variant || '—'}</td><td>${p.size}</td>
+        <td>${p.variant || p.size}</td>
         <td style="color:var(--text-muted)">${p.qty}</td>
         <td><div class="qty-main">${p.toPrint > 0 ? p.toPrint : '<span style="color:var(--text-faint)">0</span>'}</div>${p.deducted > 0 ? `<div class="qty-note">− ${p.deducted} surplus</div>` : ''}</td>
         <td>${p.toPrint === 0 ? '<span class="badge badge-green">Couvert surplus</span>' : '<span class="badge badge-blue">À imprimer</span>'}</td>
@@ -451,7 +451,7 @@ function renderCSV() {
   const date = new Date().toLocaleDateString('fr-FR');
   const lines = [`FMC BETTER Liste de production Atelier Paris ${date}`, '', 'Produit;Quantite a imprimer'];
   prodList.filter(p => p.toPrint > 0).sort((a, b) => a.name.localeCompare(b.name, 'fr')).forEach(p => {
-    const label = `${p.name} / ${p.variant ? p.variant + ' / ' : ''}${p.size}`;
+    const label = `${p.name} / ${p.variant || p.size}`;
     lines.push(`"${label}";${p.toPrint}`);
   });
   document.getElementById('csv-preview').textContent = lines.join('\n');

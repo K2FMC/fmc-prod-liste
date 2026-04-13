@@ -144,14 +144,15 @@
       <div class="card">
         <div class="card-header"><span class="card-title">Ajouter un article en surplus</span></div>
         <div class="card-body">
-          <div class="form-grid" style="grid-template-columns:1fr 120px 80px auto;align-items:end">
-            <div class="form-group"><label>SKU / Nom produit</label><input type="text" id="s-sku" placeholder="ex: TEE-SCRIPT-BLUE" /></div>
-            <div class="form-group"><label>Taille</label>
-              <select id="s-size"><option value="">— Taille —</option><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option><option>Unique</option></select>
-            </div>
-            <div class="form-group"><label>Quantité</label><input type="number" id="s-qty" placeholder="1" min="1" /></div>
-            <button class="btn btn-primary" onclick="addSurplus()">Ajouter</button>
-          </div>
+          <div class="form-grid" style="grid-template-columns:1fr 120px 120px 80px auto;align-items:end">
+           <div class="form-group"><label>SKU / Nom produit</label><input type="text" id="s-sku" placeholder="ex: Money Chasers" /></div>
+           <div class="form-group"><label>Couleur (optionnel)</label><input type="text" id="s-color" placeholder="ex: Blanc" /></div>
+           <div class="form-group"><label>Taille</label>
+             <select id="s-size"><option value="">— Taille —</option><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option><option>Unique</option></select>
+           </div>
+           <div class="form-group"><label>Quantité</label><input type="number" id="s-qty" placeholder="1" min="1" /></div>
+           <button class="btn btn-primary" onclick="addSurplus()">Ajouter</button>
+         </div>
           <div id="surplus-err" style="font-size:12px;color:var(--red-text);display:none;margin-top:-6px"></div>
         </div>
       </div>
@@ -243,19 +244,24 @@ function processOrders(orderEdges) {
       const isParis = (lieu && lieu.toLowerCase() === 'paris') || (prod.tags || []).includes('print-paris');
       if (!isParis) continue;
       hasParisItem = true;
-      const sizeOpt = item.variant && item.variant.selectedOptions
-        ? item.variant.selectedOptions.find(o => ['taille','size'].includes(o.name.toLowerCase()))
-        : null;
-      const size = sizeOpt ? sizeOpt.value : (item.variantTitle || 'Unique');
-      const key = item.title + '||' + (item.variantTitle || '') + '||' + size;
-      if (!agg[key]) agg[key] = { name: item.title, variant: item.variantTitle || '', size, qty: 0, refs: [] };
+      const options = item.variant && item.variant.selectedOptions ? item.variant.selectedOptions : [];
+      const sizeOpt = options.find(o => ['taille','size'].includes(o.name.toLowerCase()));
+      const colorOpt = options.find(o => ['couleur','color','colour'].includes(o.name.toLowerCase()));
+      const size = sizeOpt ? sizeOpt.value : 'Unique';
+      const variant = colorOpt ? colorOpt.value : '';
+      const key = item.title + '||' + variant + '||' + size;
+      if (!agg[key]) agg[key] = { name: item.title, variant, size, qty: 0, refs: [] };
       agg[key].qty += item.quantity;
       agg[key].refs.push(order.name);
     }
     if (hasParisItem) orderSet.add(order.name);
   }
   prodList = Object.values(agg).map(item => {
-    const s = surplus.find(s => item.name.toUpperCase().includes(s.sku.toUpperCase()) && s.size === item.size);
+    const s = surplus.find(s =>
+      item.name.toUpperCase().includes(s.sku.toUpperCase()) &&
+      s.size === item.size &&
+      (s.color === '' || !item.variant || s.color.toUpperCase() === item.variant.toUpperCase())
+    );
     const available = s ? Math.max(0, s.qty - (s.used || 0)) : 0;
     const deducted = Math.min(available, item.qty);
     if (s && deducted > 0) s.used = (s.used || 0) + deducted;
@@ -275,7 +281,7 @@ function renderProdList(orderCount) {
   document.getElementById('prod-count').textContent = prodList.filter(p => p.toPrint > 0).length + ' articles';
   if (!prodList.length) { document.getElementById('prod-content').innerHTML = '<div class="empty">Aucune commande en attente de production Paris.</div>'; return; }
   document.getElementById('prod-content').innerHTML = `
-    <table><thead><tr><th>Produit</th><th>Variante</th><th>Taille</th><th>Commandé</th><th>À imprimer</th><th>Statut</th></tr></thead><tbody>
+    <table><thead><tr><th>Produit</th><th>Couleur</th><th>Taille</th><th>Commandé</th><th>À imprimer</th><th>Statut</th></tr></thead><tbody>
       ${prodList.map(p => `<tr>
         <td><div class="prod-name">${p.name}</div><div class="prod-ref">${[...new Set(p.refs)].join(', ')}</div></td>
         <td>${p.variant || '—'}</td><td>${p.size}</td>
@@ -294,6 +300,7 @@ async function loadSurplus() {
 
 async function addSurplus() {
   const sku = document.getElementById('s-sku').value.trim();
+  const color = document.getElementById('s-color').value.trim();
   const size = document.getElementById('s-size').value;
   const qty = parseInt(document.getElementById('s-qty').value);
   const err = document.getElementById('surplus-err');
@@ -302,14 +309,14 @@ async function addSurplus() {
   await fetch('/api/surplus', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sku, size, qty })
+    body: JSON.stringify({ sku, color, size, qty })
   });
   document.getElementById('s-sku').value = '';
+  document.getElementById('s-color').value = '';
   document.getElementById('s-size').value = '';
   document.getElementById('s-qty').value = '';
   await loadSurplus();
 }
-
 async function removeSurplus(id) {
   await fetch(`/api/surplus/${id}`, { method: 'DELETE' });
   await loadSurplus();

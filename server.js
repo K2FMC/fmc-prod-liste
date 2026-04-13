@@ -14,7 +14,27 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Créer la table surplus au démarrage si elle n'existe pas
+const STORE = process.env.SHOPIFY_STORE;
+const CLIENT_ID = process.env.SHOPIFY_CLIENT_ID;
+const CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET;
+
+let cachedToken = null;
+let tokenExpiry = 0;
+
+async function getShopifyToken() {
+  if (cachedToken && Date.now() < tokenExpiry - 60000) return cachedToken;
+  const res = await fetch(`https://${STORE}/admin/oauth/access_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_id: CLIENT_ID, client_secret: CLIENT_SECRET, grant_type: 'client_credentials' })
+  });
+  const data = await res.json();
+  if (data.errors) throw new Error('Auth Shopify échouée');
+  cachedToken = data.access_token;
+  tokenExpiry = Date.now() + (data.expires_in || 86400) * 1000;
+  return cachedToken;
+}
+
 async function initDB() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS surplus (
@@ -33,28 +53,12 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Token Shopify
-app.post('/api/token', async (req, res) => {
-  const { store, clientId, clientSecret } = req.body;
-  try {
-    const response = await fetch(`https://${store}/admin/oauth/access_token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, grant_type: 'client_credentials' })
-    });
-    const data = await response.json();
-    if (data.errors) return res.status(401).json({ error: data.errors });
-    res.json(data);
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Shopify GraphQL
+// Shopify GraphQL — credentials côté serveur uniquement
 app.post('/api/shopify', async (req, res) => {
-  const { store, token, query } = req.body;
+  const { query } = req.body;
   try {
-    const response = await fetch(`https://${store}/admin/api/2024-01/graphql.json`, {
+    const token = await getShopifyToken();
+    const response = await fetch(`https://${STORE}/admin/api/2024-01/graphql.json`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },
       body: JSON.stringify({ query })
@@ -76,7 +80,7 @@ app.get('/api/surplus', async (req, res) => {
   }
 });
 
-// POST surplus — ajouter ou incrémenter
+// POST surplus
 app.post('/api/surplus', async (req, res) => {
   const { sku, size, qty } = req.body;
   try {
@@ -98,17 +102,6 @@ app.delete('/api/surplus/:id', async (req, res) => {
   try {
     await pool.query('DELETE FROM surplus WHERE id = $1', [req.params.id]);
     res.json({ success: true });
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// PATCH surplus — mettre à jour la quantité consommée
-app.patch('/api/surplus/:id', async (req, res) => {
-  const { used } = req.body;
-  try {
-    const result = await pool.query('UPDATE surplus SET qty = qty - $1 WHERE id = $2 AND qty - $1 >= 0 RETURNING *', [used, req.params.id]);
-    res.json(result.rows[0] || { error: 'Stock insuffisant' });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }

@@ -1,5 +1,3 @@
-console.log('STORE:', process.env.SHOPIFY_STORE);
-console.log('CLIENT_ID:', process.env.SHOPIFY_CLIENT_ID);
 const express = require('express');
 const fetch = require('node-fetch');
 const cors = require('cors');

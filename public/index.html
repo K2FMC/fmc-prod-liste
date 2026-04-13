@@ -235,10 +235,11 @@ function init() {
     document.getElementById('cfg-client-id').value = config.clientId;
     document.getElementById('cfg-client-secret').value = config.clientSecret;
   }
-  const sv = localStorage.getItem('fmc_surplus');
-  if (sv) surplus = JSON.parse(sv);
-  updateStatus(); renderSurplus();
+  updateStatus();
+  loadSurplus();
 }
+
+init();
 
 // ── NAV ────────────────────────────────────────────────────────────────────
 function showSection(name, el) {
@@ -411,38 +412,49 @@ function renderProdList(orderCount) {
 }
 
 // ── SURPLUS ────────────────────────────────────────────────────────────────
-function addSurplus() {
+async function loadSurplus() {
+  const res = await fetch('/api/surplus');
+  surplus = await res.json();
+  renderSurplus();
+}
+
+async function addSurplus() {
   const sku = document.getElementById('s-sku').value.trim();
   const size = document.getElementById('s-size').value;
   const qty = parseInt(document.getElementById('s-qty').value);
   const err = document.getElementById('surplus-err');
   if (!sku || !size || !qty || qty < 1) { err.textContent = 'Remplis tous les champs.'; err.style.display = 'block'; return; }
   err.style.display = 'none';
-  const existing = surplus.find(s => s.sku.toLowerCase() === sku.toLowerCase() && s.size === size);
-  if (existing) existing.qty += qty;
-  else surplus.push({ sku, size, qty, used: 0 });
-  localStorage.setItem('fmc_surplus', JSON.stringify(surplus));
+  await fetch('/api/surplus', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sku, size, qty })
+  });
   document.getElementById('s-sku').value = '';
   document.getElementById('s-size').value = '';
   document.getElementById('s-qty').value = '';
-  renderSurplus();
+  await loadSurplus();
 }
 
-function removeSurplus(i) {
-  surplus.splice(i, 1);
-  localStorage.setItem('fmc_surplus', JSON.stringify(surplus));
-  renderSurplus();
+async function removeSurplus(id) {
+  await fetch(`/api/surplus/${id}`, { method: 'DELETE' });
+  await loadSurplus();
 }
 
 function renderSurplus() {
   document.getElementById('surplus-count').textContent = surplus.length + ' références';
   const tbody = document.getElementById('surplus-tbody');
   if (!surplus.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">Aucun article en surplus.</td></tr>'; return; }
-  tbody.innerHTML = surplus.map((s, i) => {
+  tbody.innerHTML = surplus.map(s => {
     const left = Math.max(0, s.qty - (s.used || 0));
-    return `<tr><td class="prod-name">${s.sku}</td><td>${s.size}</td><td>${s.qty}</td><td>${s.used || '—'}</td>
+    return `<tr>
+      <td class="prod-name">${s.sku}</td>
+      <td>${s.size}</td>
+      <td>${s.qty}</td>
+      <td>${s.used || '—'}</td>
       <td>${left > 0 ? `<span class="badge badge-green">${left} dispo</span>` : '<span class="badge badge-amber">Épuisé</span>'}</td>
-      <td><button class="btn btn-sm btn-danger" onclick="removeSurplus(${i})">Retirer</button></td></tr>`;
+      <td><button class="btn btn-sm btn-danger" onclick="removeSurplus(${s.id})">Retirer</button></td>
+    </tr>`;
   }).join('');
 }
 

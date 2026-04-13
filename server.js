@@ -64,6 +64,8 @@ app.post('/api/shopify', async (req, res) => {
       body: JSON.stringify({ query })
     });
     const data = await response.json();
+    if (data.errors) return res.status(400).json({ error: data.errors[0].message });
+    if (!data.data) return res.status(400).json({ error: 'Réponse Shopify vide — vérifie le token', raw: data });
     res.json(data);
   } catch(e) {
     res.status(500).json({ error: e.message });

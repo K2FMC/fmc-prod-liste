@@ -40,14 +40,15 @@ async function initDB() {
     CREATE TABLE IF NOT EXISTS surplus (
       id SERIAL PRIMARY KEY,
       sku TEXT NOT NULL,
+      color TEXT DEFAULT '',
       size TEXT NOT NULL,
       qty INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
+  await pool.query(`ALTER TABLE surplus ADD COLUMN IF NOT EXISTS color TEXT DEFAULT ''`);
   console.log('Base de données prête.');
 }
-initDB();
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

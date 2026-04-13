@@ -103,10 +103,6 @@
         <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 10v3h10v-3M8 2v8M5 7l3 3 3-3"/></svg>
         Export CSV
       </div>
-      <div class="nav-item" onclick="showSection('config', this)">
-        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42"/></svg>
-        Configuration
-      </div>
     </nav>
     <div class="sidebar-footer">
       <span class="status-dot" id="status-dot"></span>
@@ -187,61 +183,12 @@
         </div>
       </div>
     </div>
-
-    <!-- CONFIG -->
-    <div id="section-config" class="section">
-      <div class="page-header">
-        <div class="page-title">Configuration</div>
-        <div class="page-sub">Connexion à l'API Shopify</div>
-      </div>
-      <div class="alert alert-amber" style="margin-bottom:1rem">⚠️ Tes identifiants sont stockés uniquement dans ce navigateur. Ils ne quittent jamais ton ordinateur.</div>
-      <div class="card">
-        <div class="card-header"><span class="card-title">Connexion Shopify</span></div>
-        <div class="card-body">
-          <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-bottom:10px">
-            <div class="form-group"><label>Nom de la boutique</label><input type="text" id="cfg-store" placeholder="3996a4-23.myshopify.com" /></div>
-            <div class="form-group"><label>Client ID</label><input type="text" id="cfg-client-id" placeholder="8ce2fdad..." /></div>
-          </div>
-          <div class="form-grid" style="grid-template-columns:1fr auto;align-items:end;margin-bottom:10px">
-            <div class="form-group"><label>Client Secret</label><input type="password" id="cfg-client-secret" placeholder="shpss_..." /></div>
-            <button class="btn btn-primary" onclick="saveConfig()">Enregistrer &amp; Tester</button>
-          </div>
-          <div id="config-status"></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title">Produits — Lieu de production</span>
-          <button class="btn btn-sm" onclick="loadProducts()">↺ Charger depuis Shopify</button>
-        </div>
-        <div id="products-content"><div class="empty">Connecte Shopify et clique sur "Charger".</div></div>
-      </div>
-    </div>
   </main>
 </div>
 
 <script>
-// ── STATE ──────────────────────────────────────────────────────────────────
-let config = { store: '', clientId: '', clientSecret: '', token: null, tokenExpiry: 0 };
 let surplus = [], prodList = [];
 
-// ── INIT ───────────────────────────────────────────────────────────────────
-function init() {
-  const saved = localStorage.getItem('fmc_config');
-  if (saved) {
-    const c = JSON.parse(saved);
-    config.store = c.store || ''; config.clientId = c.clientId || ''; config.clientSecret = c.clientSecret || '';
-    document.getElementById('cfg-store').value = config.store;
-    document.getElementById('cfg-client-id').value = config.clientId;
-    document.getElementById('cfg-client-secret').value = config.clientSecret;
-  }
-  updateStatus();
-  loadSurplus();
-}
-
-init();
-
-// ── NAV ────────────────────────────────────────────────────────────────────
 function showSection(name, el) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -249,93 +196,20 @@ function showSection(name, el) {
   el.classList.add('active');
 }
 
-function updateStatus() {
-  const connected = config.store && config.clientId && config.clientSecret;
-  document.getElementById('status-dot').className = 'status-dot' + (connected ? ' connected' : '');
-  document.getElementById('status-label').textContent = connected ? config.store.replace('.myshopify.com','') : 'Non connecté';
-}
-
-// ── AUTH via serveur ────────────────────────────────────────────────────────
-async function getToken() {
-  if (config.token && Date.now() < config.tokenExpiry - 60000) return config.token;
-  const res = await fetch('/api/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ store: config.store, clientId: config.clientId, clientSecret: config.clientSecret })
-  });
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  config.token = data.access_token;
-  config.tokenExpiry = Date.now() + (data.expires_in || 86400) * 1000;
-  return config.token;
-}
-
-// ── SHOPIFY GraphQL via serveur ─────────────────────────────────────────────
 async function shopifyQuery(query) {
-  const token = await getToken();
   const res = await fetch('/api/shopify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ store: config.store, token, query })
+    body: JSON.stringify({ query })
   });
   const data = await res.json();
   if (data.errors) throw new Error(data.errors[0].message);
   return data.data;
 }
 
-// ── CONFIG ─────────────────────────────────────────────────────────────────
-async function saveConfig() {
-  config.store = document.getElementById('cfg-store').value.trim();
-  config.clientId = document.getElementById('cfg-client-id').value.trim();
-  config.clientSecret = document.getElementById('cfg-client-secret').value.trim();
-  localStorage.setItem('fmc_config', JSON.stringify({ store: config.store, clientId: config.clientId, clientSecret: config.clientSecret }));
-  updateStatus();
-  const el = document.getElementById('config-status');
-  el.innerHTML = '<div class="alert alert-amber">Test de connexion en cours...</div>';
-  try {
-    await getToken();
-    el.innerHTML = '<div class="alert alert-green">✓ Connexion réussie ! Tu peux charger les commandes.</div>';
-  } catch(e) {
-    el.innerHTML = `<div class="alert alert-red">✗ Connexion échouée : ${e.message}</div>`;
-  }
-}
-
-// ── PRODUCTS ───────────────────────────────────────────────────────────────
-function isProductParis(p) {
-  if (p.lieu && p.lieu.toLowerCase() === 'paris') return true;
-  if (p.tags && p.tags.includes('print-paris')) return true;
-  return false;
-}
-
-async function loadProducts() {
-  const el = document.getElementById('products-content');
-  if (!config.store) { el.innerHTML = '<div class="empty">Configure la connexion Shopify d\'abord.</div>'; return; }
-  el.innerHTML = '<div class="loading"><div class="spinner"></div> Chargement des produits...</div>';
-  try {
-    const data = await shopifyQuery(`{ products(first: 100) { edges { node { id title tags metafield(namespace: "custom", key: "production_lieu") { value } } } } }`);
-    const products = data.products.edges.map(e => ({
-      id: e.node.id, title: e.node.title, tags: e.node.tags || [],
-      lieu: e.node.metafield ? e.node.metafield.value : null
-    }));
-    const paris = products.filter(p => isProductParis(p));
-    el.innerHTML = `
-      <div style="padding:10px 16px;font-size:12px;color:var(--text-muted);border-bottom:1px solid var(--border)">
-        ${paris.length} produit(s) <span class="tag-paris">PARIS</span> sur ${products.length} total.
-        Pour taguer : ajoute le tag <strong>print-paris</strong> ou le métafield <code>custom.production_lieu = paris</code>.
-      </div>
-      <table><thead><tr><th>Produit</th><th>Lieu de production</th></tr></thead><tbody>
-        ${products.map(p => `<tr><td class="prod-name">${p.title}</td><td>${isProductParis(p) ? '<span class="tag-paris">PARIS</span>' : '<span class="tag-chine">CHINE / NON DÉFINI</span>'}</td></tr>`).join('')}
-      </tbody></table>`;
-  } catch(e) {
-    el.innerHTML = `<div class="alert alert-red" style="margin:1rem">✗ Erreur : ${e.message}</div>`;
-  }
-}
-
-// ── ORDERS ─────────────────────────────────────────────────────────────────
 async function loadOrders() {
   const alertEl = document.getElementById('prod-alert');
   const contentEl = document.getElementById('prod-content');
-  if (!config.store) { alertEl.innerHTML = '<div class="alert alert-amber">⚙️ Configure la connexion Shopify d\'abord.</div>'; return; }
   alertEl.innerHTML = '';
   contentEl.innerHTML = '<div class="loading"><div class="spinner"></div> Chargement des commandes...</div>';
   try {
@@ -350,8 +224,7 @@ async function loadOrders() {
     }`);
     processOrders(data.orders.edges);
   } catch(e) {
-    contentEl.innerHTML = `<div class="alert alert-red" style="margin:1rem">✗ Erreur API : ${e.message}</div>`;
-    document.getElementById('m-orders').textContent = '!';
+    contentEl.innerHTML = `<div class="alert alert-red" style="margin:1rem">✗ Erreur : ${e.message}</div>`;
   }
 }
 
@@ -400,10 +273,10 @@ function renderProdList(orderCount) {
   document.getElementById('prod-count').textContent = prodList.filter(p => p.toPrint > 0).length + ' articles';
   if (!prodList.length) { document.getElementById('prod-content').innerHTML = '<div class="empty">Aucune commande en attente de production Paris.</div>'; return; }
   document.getElementById('prod-content').innerHTML = `
-    <table><thead><tr><th>Produit</th><th>Variante</th><th>Commandé</th><th>À imprimer</th><th>Statut</th></tr></thead><tbody>
+    <table><thead><tr><th>Produit</th><th>Variante</th><th>Taille</th><th>Commandé</th><th>À imprimer</th><th>Statut</th></tr></thead><tbody>
       ${prodList.map(p => `<tr>
         <td><div class="prod-name">${p.name}</div><div class="prod-ref">${[...new Set(p.refs)].join(', ')}</div></td>
-        <td>${p.variant || p.size}</td>
+        <td>${p.variant || '—'}</td><td>${p.size}</td>
         <td style="color:var(--text-muted)">${p.qty}</td>
         <td><div class="qty-main">${p.toPrint > 0 ? p.toPrint : '<span style="color:var(--text-faint)">0</span>'}</div>${p.deducted > 0 ? `<div class="qty-note">− ${p.deducted} surplus</div>` : ''}</td>
         <td>${p.toPrint === 0 ? '<span class="badge badge-green">Couvert surplus</span>' : '<span class="badge badge-blue">À imprimer</span>'}</td>
@@ -411,7 +284,6 @@ function renderProdList(orderCount) {
     </tbody></table>`;
 }
 
-// ── SURPLUS ────────────────────────────────────────────────────────────────
 async function loadSurplus() {
   const res = await fetch('/api/surplus');
   surplus = await res.json();
@@ -448,9 +320,7 @@ function renderSurplus() {
   tbody.innerHTML = surplus.map(s => {
     const left = Math.max(0, s.qty - (s.used || 0));
     return `<tr>
-      <td class="prod-name">${s.sku}</td>
-      <td>${s.size}</td>
-      <td>${s.qty}</td>
+      <td class="prod-name">${s.sku}</td><td>${s.size}</td><td>${s.qty}</td>
       <td>${s.used || '—'}</td>
       <td>${left > 0 ? `<span class="badge badge-green">${left} dispo</span>` : '<span class="badge badge-amber">Épuisé</span>'}</td>
       <td><button class="btn btn-sm btn-danger" onclick="removeSurplus(${s.id})">Retirer</button></td>
@@ -458,14 +328,16 @@ function renderSurplus() {
   }).join('');
 }
 
-// ── CSV ────────────────────────────────────────────────────────────────────
 function renderCSV() {
   const date = new Date().toLocaleDateString('fr-FR');
-  const lines = [`FMC BETTER Liste de production Atelier Paris ${date}`, '', 'Produit;Quantite a imprimer'];
-  prodList.filter(p => p.toPrint > 0).sort((a, b) => a.name.localeCompare(b.name, 'fr')).forEach(p => {
-    const label = `${p.name} / ${p.variant || p.size}`;
-    lines.push(`"${label}";${p.toPrint}`);
-  });
+  const lines = [`FMC BETTER — Liste de production Atelier Paris — ${date}`, '', 'Produit;Quantité à imprimer'];
+  prodList
+    .filter(p => p.toPrint > 0)
+    .sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+    .forEach(p => {
+      const label = `${p.name} / ${p.variant || p.size}`;
+      lines.push(`"${label}";${p.toPrint}`);
+    });
   document.getElementById('csv-preview').textContent = lines.join('\n');
 }
 
@@ -485,7 +357,7 @@ function copyCSV() {
   });
 }
 
-init();
+loadSurplus();
 </script>
 </body>
 </html>

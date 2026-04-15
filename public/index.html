@@ -339,13 +339,12 @@ function renderSurplus() {
 
 function renderCSV() {
   const date = new Date().toLocaleDateString('fr-FR');
-  const lines = [`FMC BETTER — Liste de production Atelier Paris — ${date}`, '', 'Produit;Quantité à imprimer'];
+  const lines = [`FMC BETTER — Liste de production Atelier Paris — ${date}`, '', 'Produit;Couleur;Taille;Quantité à imprimer'];
   prodList
     .filter(p => p.toPrint > 0)
     .sort((a, b) => a.name.localeCompare(b.name, 'fr'))
     .forEach(p => {
-      const label = `${p.name} / ${p.variant || p.size}`;
-      lines.push(`"${label}";${p.toPrint}`);
+      lines.push(`"${p.name}";${p.variant || ''};${p.size};${p.toPrint}`);
     });
   document.getElementById('csv-preview').textContent = lines.join('\n');
 }
